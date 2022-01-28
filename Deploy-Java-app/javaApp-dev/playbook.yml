@@ -1,0 +1,38 @@
+---
+- hosts: webservers
+  tasks:
+
+    - name: Install maven
+      become: yes
+      apt:
+        name: maven
+        state: present
+        update_cache: yes
+
+    - name: Copy files
+      copy:
+        src: ./app
+        dest: ~/
+        remote_src: no
+
+    - name: Edit application.properties
+      shell: |
+        sed -i -e "s/suchname=Name/suchname=$(curl http://169.254.169.254/latest/meta-data/placement/availability-zone)/" ~/app/src/main/resources/application.properties
+
+    - name: Run maven install
+      shell: |
+        mvn package
+      args:
+        chdir: ~/app
+
+    - name: Start Java app
+      shell:
+        nohup java -jar suchapp-0.0.1-SNAPSHOT.jar > log.log 2>&1 &
+      args:
+        chdir: ~/app/target/
+
+    - name: Restart nginx
+      become: yes
+      systemd:
+        name: nginx 
+        state: restarted

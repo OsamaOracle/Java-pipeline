@@ -1,0 +1,59 @@
+name: Deploy Application
+on:
+  push:
+    branches:
+      - prod
+      - dev
+      - sta
+      - acc
+
+jobs:
+  deploy:
+    name: Deploy Project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v5.1
+
+      - name: SSH Agent
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: Install SSH key of bastion
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.PRIVATE_KEY }}
+          name: id_rsa
+          known_hosts: unnecessary
+          if_key_exists: ignore
+          config: |
+            Host bastion
+              HostName ${{ secrets.BASTION }}
+              User ubuntu
+              StrictHostKeyChecking no
+
+      - name: Generate known_hosts for webservers
+        run: |
+          echo "${{ secrets.WEB }}" > hosts
+          echo "${{ secrets.WEB }}" >> ./environments/${{ steps.branch-name.outputs.current_branch }}/inv
+          for host in $(cat hosts); do
+          cat << EOF >> ~/.ssh/config
+          Host $host
+              Hostname $host
+              User ubuntu
+              IdentityFile ~/.ssh/id_rsa
+              ProxyCommand ssh -W %h:%p bastion
+              StrictHostKeyChecking no
+          EOF
+          done
+
+      - name: Run playbook
+        uses: dawidd6/action-ansible-playbook@v2
+        with:
+          playbook: playbook.yml
+          options: |
+            --inventory ./environments/${{ steps.branch-name.outputs.current_branch }}/inv

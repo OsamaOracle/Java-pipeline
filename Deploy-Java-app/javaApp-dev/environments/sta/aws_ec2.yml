@@ -1,0 +1,31 @@
+plugin: amazon.aws.aws_ec2
+aws_profile: default
+
+regions:
+  - "us-east-1"
+
+strict: False
+
+keyed_groups:
+- key: tags
+  prefix: tag
+
+filters:
+  tag:Name:
+    - Webservers
+    - Bastion
+
+  tag:Environment:
+    - sta
+
+  instance-state-name : running
+  
+hostnames:
+  - ip-address
+  - private-ip-address
+  - tag:Name
+  - dns-name
+
+compose:
+  ansible_host: private-ip-address
+  ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -W %h:%p -q bastion"'
